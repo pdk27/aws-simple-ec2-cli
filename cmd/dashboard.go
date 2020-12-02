@@ -76,17 +76,13 @@ func ValidateDashboardFlags() bool {
 
 // Get the information of the instance and connect to it
 func GetDashboardSummaryForRegion(h *ec2helper.EC2Helper) error {
-	err := ec2dashboardhelper.GenerateDashboardForRegion(h.Sess)
-	if err != nil {
-		return err
-	}
-
+	ec2dashboardhelper.GenerateDashboardForRegion(h)
 	return nil
 }
 
 // Get the information of the instance and connect to it
 func GetDashboardSummaryWorldWide(h *ec2helper.EC2Helper) error {
-	err := ec2dashboardhelper.GenerateDashboardWorldWide(h.Sess)
+	err := ec2dashboardhelper.GenerateDashboardWorldWide(h)
 	if err != nil {
 		return err
 	}
