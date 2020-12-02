@@ -231,7 +231,7 @@ func AppendInstances(data [][]string, indexedOptions []string, instances []*ec2.
 Append all instances. When a list of already added instance IDs is provided, the function will identify
 which instance IDs are already added to selection and exclude the added instance IDs from the table
 */
-func AppendInstancesForDashboard(data [][]string, indexedOptions []string, instances []*ec2.Instance) ([][]string, []string) {
+func AppendDataForDashboard(data [][]string, indexedOptions []string, instances []*ec2.Instance) ([][]string, []string) {
 	for _, instance := range instances {
 		instanceName := *instance.InstanceId
 		firstRow := []string{instanceName, "", "", ""}
