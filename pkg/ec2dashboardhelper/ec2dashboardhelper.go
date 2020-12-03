@@ -40,8 +40,15 @@ func GenerateDashboardWorldWide(h *ec2helper.EC2Helper) error {
 	// TODO: Generate dashboard here by calling for `GetDashboardSummaryForRegion` for each region
 	regions , _ := h.GetEnabledRegions()
 	for _, region := range regions {
-		h.ChangeRegion(*region.RegionName)
-		GenerateDashboardForRegion(h)
+		// This throws error as it is internal region
+		if *region.RegionName != "ap-northeast-3" {
+			h.ChangeRegion(*region.RegionName)
+			c := config.Config{
+				AWSSession: h.Sess,
+				Region:     *region.RegionName,
+			}
+			GenerateDashboardForRegionWithEverything(c)
+		}
 	}
 	return nil
 }
