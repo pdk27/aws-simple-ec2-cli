@@ -10,7 +10,6 @@ import (
 	"simple-ec2/pkg/table"
 )
 
-
 // Generate dashboard for the region
 func GenerateDashboardForRegion(h *ec2helper.EC2Helper) {
 	// TODO: Generate dashboard here

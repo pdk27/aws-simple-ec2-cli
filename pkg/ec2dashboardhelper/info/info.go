@@ -16,10 +16,10 @@ import (
 type InstanceInfo struct {
 	// info tracked per instance
 	InstanceId        string
-	InstanceName      string
+	//InstanceName      string
 	InstanceType      string
 	Region 			  string
-	EbsAttached       string
+	//EbsAttached       string
 	//CPUCreditsBalance float64
 	AvgCostPerPeriod  AvgCostPerPeriod
 
@@ -54,11 +54,11 @@ type Recommendation struct {
 }
 
 type AvgCostPerPeriod struct {
-	//AmortizedCost string
+	Amortized string
 	Blended 	string
-	//NetAmortizedCost	string
-	//NetUnblendedCost	string
-	Unblended	string
+	//NetAmortized	string
+	//NetUnblended	string
+	//Unblended	string
 }
 
 type ApiConfig struct {
@@ -86,7 +86,7 @@ func PrintTable(instancesInfo []InstanceInfo) {
 
 	for _, i := range instancesInfo {
 		cef := fmt.Sprintf("%d", getCostEffectivenessFactor(i))
-		ebs := fmt.Sprintf("%s", i.EbsAttached)
+		//ebs := fmt.Sprintf("%s", i.EbsAttached)
 		c := fmt.Sprintf("%+v", i.AvgCostPerPeriod)
 		cu := fmt.Sprintf("%d", i.UsageInfo.AvgCpuCreditUsagePercentage)
 		ni := fmt.Sprintf("%d", i.UsageInfo.AvgNetworkIn)
@@ -94,14 +94,14 @@ func PrintTable(instancesInfo []InstanceInfo) {
 		cp := fmt.Sprintf("%d", i.UsageInfo.AvgCpuCreditUsagePercentage)
 		cs := fmt.Sprintf("%d", i.UsageInfo.MaxCPUSurplusCreditsCharged)
 
-		row := []string{i.InstanceId, i.InstanceType, ebs, cef, c, cu, ni, no, cp, cs}
+		row := []string{i.InstanceId, i.InstanceType, cef, c, cu, ni, no, cp, cs}
 		//indexedOptions = append(indexedOptions, "Capacity Type")
 
 		// Append the main row
 		data = append(data, row)
 	}
 
-	header := []string{"Instance_Id", "Type", "Ebs_Attached", "Cost_Effectiveness_Factor", "Avg_Cost", "Avg_Cpu_Utilization %", "Avg_Network_In",
+	header := []string{"Instance_Id", "Type", "Cost_Effectiveness_Factor", "Avg_Cost", "Avg_Cpu_Utilization %", "Avg_Network_In",
 		"Avg_Network_Out", "Avg_Cpu_Credit_Usage %", "Max_CPU_Surplus_Credits_Charged"}
 	optionsText := table.BuildTable(data, header)
 	fmt.Print(optionsText)

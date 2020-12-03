@@ -40,7 +40,7 @@ func init() {
 
 	dashboardCmd.Flags().StringVarP(&regionFlag, "region", "r", "", "The region for which you would like to see AWS resources and recommendations")
 	dashboardCmd.Flags().StringVarP(&granularityFlag, "granularity", "g", "DAILY", "The AWS cost granularity. Choose from [MONTHLY, DAILY, HOURLY] (Default: DAILY)")
-	dashboardCmd.Flags().StringVarP(&costTypeFlag, "costType", "c", "BlendedCost,UnblendedCost",
+	dashboardCmd.Flags().StringVarP(&costTypeFlag, "costType", "c", "BlendedCost,AmortizedCost",
 		"The type of costs. Choose from [AmortizedCost, BlendedCost, NetAmortizedCost, NetUnblendedCost, UnblendedCost] (Default: 'BlendedCost','UnblendedCost'")
 	dashboardCmd.Flags().IntVarP(&evalPeriodInDaysFlag, "evaluationPeriodInDays", "p", 7, "The evaluation period for costs and metrics in days. (Default: 7)")
 }

@@ -139,10 +139,13 @@ func getCostsWithGroupBy(
 
 	instanceTypeById := make(map[string]string) // {instanceId: X, type: Y}
 	blendedCostsPerInstance := make(map[string][]string) // {instanceId: X, blendedCost: Y}
-	unblendedCostsPerInstance := make(map[string][]string)// {instanceId: X, unblendedCost: Y}
+	//unblendedCostsPerInstance := make(map[string][]string)// {instanceId: X, unblendedCost: Y}
+	amortizedCostsPerInstance := make(map[string][]string)// {instanceId: X, amortizedCost: Y}
 	for _, res := range result.ResultsByTime {
 		var id, iType string
 		for _, g := range res.Groups {
+			fmt.Println(g)
+
 			keys := g.Keys
 			if strings.Contains(*keys[0], "i-") {
 				id = *keys[0]
@@ -158,9 +161,13 @@ func getCostsWithGroupBy(
 			bCosts = append(bCosts, *g.Metrics["BlendedCost"].Amount)
 			blendedCostsPerInstance[id] = bCosts
 
-			ubCosts := unblendedCostsPerInstance[id]
-			ubCosts = append(ubCosts, *g.Metrics["UnblendedCost"].Amount)
-			unblendedCostsPerInstance[id] = ubCosts
+			//ubCosts := unblendedCostsPerInstance[id]
+			//ubCosts = append(ubCosts, *g.Metrics["UnblendedCost"].Amount)
+			//unblendedCostsPerInstance[id] = ubCosts
+
+			amCosts := amortizedCostsPerInstance[id]
+			amCosts = append(amCosts, *g.Metrics["AmortizedCost"].Amount)
+			amortizedCostsPerInstance[id] = amCosts
 		}
 	}
 
@@ -168,7 +175,7 @@ func getCostsWithGroupBy(
 	//fmt.Println(len(instancesInfoInput), instancesInfoInput)
 	if len(instancesInfoInput) != 0 {
 		for _, i := range instancesInfoInput {
-			var blendedSum, unblendedSum float64
+			var blendedSum, amortizedSum float64
 			for _, c := range blendedCostsPerInstance[i.InstanceId] {
 				cost, err := strconv.ParseFloat(c, 64)
 				if err == nil {
@@ -177,24 +184,32 @@ func getCostsWithGroupBy(
 			}
 			blendedAvg := (blendedSum) / float64(len(blendedCostsPerInstance[i.InstanceId]))
 
-			for _, c := range unblendedCostsPerInstance[i.InstanceId] {
+			//for _, c := range unblendedCostsPerInstance[i.InstanceId] {
+			//	cost, err := strconv.ParseFloat(c, 64)
+			//	if err == nil {
+			//		unblendedSum += cost
+			//	}
+			//}
+			//unblendedAvg := (unblendedSum) / float64(len(unblendedCostsPerInstance[i.InstanceId]))
+
+			for _, c := range amortizedCostsPerInstance[i.InstanceId] {
 				cost, err := strconv.ParseFloat(c, 64)
 				if err == nil {
-					unblendedSum += cost
+					amortizedSum += cost
 				}
 			}
-			unblendedAvg := (unblendedSum) / float64(len(unblendedCostsPerInstance[i.InstanceId]))
+			amortizedAvg := (amortizedSum) / float64(len(amortizedCostsPerInstance[i.InstanceId]))
 
 			i.AvgCostPerPeriod = info.AvgCostPerPeriod{
 				Blended: fmt.Sprintf("%.4f", blendedAvg),
-				Unblended: fmt.Sprintf("%.4f", unblendedAvg),
+				Amortized: fmt.Sprintf("%.4f", amortizedAvg),
 			}
 		}
 		instancesInfo = instancesInfoInput
 	} else {
 		// temporary build logic
 		for id, iType := range instanceTypeById {
-			var blendedSum, unblendedSum float64
+			var blendedSum, amortizedSum float64
 			for _, c := range blendedCostsPerInstance[id] {
 				cost, err := strconv.ParseFloat(c, 64)
 				if err == nil {
@@ -203,13 +218,21 @@ func getCostsWithGroupBy(
 			}
 			blendedAvg := (blendedSum) / float64(len(blendedCostsPerInstance[id]))
 
-			for _, c := range unblendedCostsPerInstance[id] {
+			//for _, c := range unblendedCostsPerInstance[id] {
+			//	cost, err := strconv.ParseFloat(c, 64)
+			//	if err == nil {
+			//		unblendedSum += cost
+			//	}
+			//}
+			//unblendedAvg := (unblendedSum) / float64(len(unblendedCostsPerInstance[id]))
+
+			for _, c := range amortizedCostsPerInstance[id] {
 				cost, err := strconv.ParseFloat(c, 64)
 				if err == nil {
-					unblendedSum += cost
+					amortizedSum += cost
 				}
 			}
-			unblendedAvg := (unblendedSum) / float64(len(unblendedCostsPerInstance[id]))
+			amortizedAvg := (amortizedSum) / float64(len(amortizedCostsPerInstance[id]))
 
 			instancesInfo = append(instancesInfo, info.InstanceInfo{
 				InstanceId: id,
@@ -217,7 +240,7 @@ func getCostsWithGroupBy(
 				Region: cfg.Region,
 				AvgCostPerPeriod: info.AvgCostPerPeriod{
 					Blended: fmt.Sprintf("%.4f", blendedAvg),
-					Unblended: fmt.Sprintf("%.4f", unblendedAvg),
+					Amortized: fmt.Sprintf("%.4f", amortizedAvg),
 				},
 			})
 		}
