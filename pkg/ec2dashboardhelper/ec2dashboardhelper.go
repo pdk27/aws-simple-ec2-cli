@@ -3,6 +3,9 @@ package ec2dashboardhelper
 import (
 	"fmt"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"simple-ec2/pkg/ec2dashboardhelper/config"
+	"simple-ec2/pkg/ec2dashboardhelper/costTracker"
+	"simple-ec2/pkg/ec2dashboardhelper/info"
 	"simple-ec2/pkg/ec2helper"
 	"simple-ec2/pkg/table"
 )
@@ -41,4 +44,25 @@ func GenerateDashboardWorldWide(h *ec2helper.EC2Helper) error {
 		GenerateDashboardForRegion(h)
 	}
 	return nil
+}
+
+
+func GenerateDashboardForRegionWithEverything(cfg config.Config) {
+	var instancesInfo []info.InstanceInfo
+	//instancesInfo = ec2helper.PopulateInstanceInfo(cfg, instancesInfo) // populate id, type, other information
+	instancesInfo = costTracker.PopulateCosts(cfg, instancesInfo)
+	//instancesInfo = recommendations.PopulateMetrics(cfg, instancesInfo)
+	//instancesInfo = cwMetrics.PopulateMetrics(cfg, instancesInfo)
+
+	info.PrintTable(instancesInfo)
+}
+
+// Contains finds a string in the given array
+func Contains(slice []*string, val *string) bool {
+	for _, item := range slice {
+		if item == val {
+			return true
+		}
+	}
+	return false
 }

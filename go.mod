@@ -9,5 +9,6 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/olekukonko/tablewriter v0.0.4
 	github.com/spf13/cobra v1.0.0
+	github.com/spf13/pflag v1.0.3
 	golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2
 )

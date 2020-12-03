@@ -14,6 +14,8 @@
 package cmd
 
 import (
+	"fmt"
+	"github.com/spf13/pflag"
 	"simple-ec2/pkg/config"
 )
 
@@ -26,4 +28,27 @@ var (
 	instanceIdFlag        []string
 )
 
+
+var (
+	granularityFlag 	 string
+	costTypeFlag         string
+	evalPeriodInDaysFlag int
+)
+
 var flagConfig = config.SimpleInfo{}
+
+// PrintFlags prints all flags of a command, if set
+func printFlags(flags *pflag.FlagSet) {
+	f := make(map[string]interface{})
+	flags.Visit(func(flag *pflag.Flag) {
+		f[flag.Name] = flag.Value
+	})
+
+	if len(f) > 0 {
+		fmt.Println("\nFlags:")
+		for key, value := range f {
+			fmt.Printf("%s: %s\n", key, value)
+		}
+		fmt.Println()
+	}
+}

@@ -14,8 +14,10 @@
 package cmd
 
 import (
-	"simple-ec2/pkg/ec2dashboardhelper"
+	"fmt"
 	"simple-ec2/pkg/cli"
+	"simple-ec2/pkg/ec2dashboardhelper"
+	"simple-ec2/pkg/ec2dashboardhelper/config"
 	"simple-ec2/pkg/ec2helper"
 
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -30,12 +32,17 @@ var dashboardCmd = &cobra.Command{
 	Run:   dashboard,
 }
 
+var	cfg config.Config
+
 // Add flags
 func init() {
 	rootCmd.AddCommand(dashboardCmd)
 
-	dashboardCmd.Flags().StringVarP(&regionFlag, "region", "r", "",
-		"The region for which you would like to see AWS resources and recommendations")
+	dashboardCmd.Flags().StringVarP(&regionFlag, "region", "r", "", "The region for which you would like to see AWS resources and recommendations")
+	dashboardCmd.Flags().StringVarP(&granularityFlag, "granularity", "g", "DAILY", "The AWS cost granularity. Choose from [MONTHLY, DAILY, HOURLY] (Default: DAILY)")
+	dashboardCmd.Flags().StringVarP(&costTypeFlag, "costType", "c", "BlendedCost,UnblendedCost",
+		"The type of costs. Choose from [AmortizedCost, BlendedCost, NetAmortizedCost, NetUnblendedCost, UnblendedCost] (Default: 'BlendedCost','UnblendedCost'")
+	dashboardCmd.Flags().IntVarP(&evalPeriodInDaysFlag, "evaluationPeriodInDays", "p", 7, "The evaluation period for costs and metrics in days. (Default: 7)")
 }
 
 // The main function
@@ -46,19 +53,34 @@ func dashboard(cmd *cobra.Command, args []string) {
 
 	// Start a new session, with the default credentials and config loading
 	sess := session.Must(session.NewSessionWithOptions(session.Options{SharedConfigState: session.SharedConfigEnable}))
+	config := config.Config{
+		AWSSession: sess,
+		Region: regionFlag,
+		Granularity: granularityFlag,
+		CostType: costTypeFlag,
+		EvaluationPeriodInDays: evalPeriodInDaysFlag,
+	}
 	ec2helper.GetDefaultRegion(sess)
-	h := ec2helper.New(sess)
 
-	dashboardSummary(h)
+	printFlags(cmd.Flags())
+	notes := "NOTE: " +
+		"\n\t* All costs are in USD" +
+		"\n\t* Averages and max values showed below are calculated over the configured evaluation period."
+	fmt.Println(notes)
+
+	dashboardSummary(config)
 }
 
 // Fetch dashboard summary for AWS resources
-func dashboardSummary(h *ec2helper.EC2Helper) {
+func dashboardSummary(config config.Config) {
+	h := ec2helper.New(config.AWSSession)
+
 	var err error
 	// Override region if specified
 	if regionFlag != "" {
 		h.ChangeRegion(regionFlag)
-		err = GetDashboardSummaryForRegion(h)
+		//err = GetDashboardSummaryForRegion(h)
+		ec2dashboardhelper.GenerateDashboardForRegionWithEverything(config)
 	} else {
 		err = GetDashboardSummaryWorldWide(h)
 	}
