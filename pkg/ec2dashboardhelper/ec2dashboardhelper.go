@@ -3,6 +3,7 @@ package ec2dashboardhelper
 import (
 	"fmt"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"simple-ec2/pkg/ec2dashboardhelper/computeOptimizer"
 	"simple-ec2/pkg/ec2dashboardhelper/config"
 	"simple-ec2/pkg/ec2dashboardhelper/costTracker"
 	"simple-ec2/pkg/ec2dashboardhelper/info"
@@ -48,6 +49,7 @@ func GenerateDashboardWorldWide(h *ec2helper.EC2Helper) error {
 
 func GenerateDashboardForRegionWithEverything(cfg config.Config) {
 	var instancesInfo []info.InstanceInfo
+	instancesInfo = computeOptimizer.GetRecommendation(cfg, instancesInfo)
 	//instancesInfo = ec2helper.PopulateInstanceInfo(cfg, instancesInfo) // populate id, type, other information
 	instancesInfo = costTracker.PopulateCosts(cfg, instancesInfo)
 	//instancesInfo = recommendations.PopulateMetrics(cfg, instancesInfo)
