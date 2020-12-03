@@ -97,14 +97,14 @@ func PrintTable(instancesInfo []InstanceInfo) {
 		cp := fmt.Sprintf("%d", i.UsageInfo.AvgCpuCreditUsagePercentage)
 		cs := fmt.Sprintf("%d", i.UsageInfo.MaxCPUSurplusCreditsCharged)
 
-		row := []string{i.InstanceId, i.InstanceType, fi, rec, cef, c, cu, ni, no, cp, cs}
+		row := []string{i.InstanceId, i.Region, i.InstanceType, fi, rec, cef, c, cu, ni, no, cp, cs}
 		//indexedOptions = append(indexedOptions, "Capacity Type")
 
 		// Append the main row
 		data = append(data, row)
 	}
 
-	header := []string{"Instance_Id", "Type", "Finding", "Recommended Instance Type", "Cost_Effectiveness_Factor", "Avg_Cost", "Avg_Cpu_Utilization %", "Avg_Network_In",
+	header := []string{"Instance_Id", "Region", "Type", "Finding", "Recommended Instance Type", "Cost_Effectiveness_Factor", "Avg_Cost", "Avg_Cpu_Utilization %", "Avg_Network_In",
 		"Avg_Network_Out", "Avg_Cpu_Credit_Usage %", "Max_CPU_Surplus_Credits_Charged"}
 	optionsText := table.BuildTable(data, header)
 	fmt.Print(optionsText)
