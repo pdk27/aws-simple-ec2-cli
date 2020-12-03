@@ -24,12 +24,18 @@ func GetRecommendation(cfg config.Config, instancesInfo []info.InstanceInfo) []i
 
 	for _, res := range result.InstanceRecommendations {
 		instanceId := strings.Split(*res.InstanceArn, "/")[1]
+		recommendations := []string{}
 		for _, g := range res.RecommendationOptions {
-			instancesInfo = append(instancesInfo, info.InstanceInfo{
-				InstanceId:   instanceId,
-				Recommendation: *g.InstanceType,
-			})
+			recommendations = append(recommendations, *g.InstanceType)
 		}
+		rec := info.Recommendation{
+			RecommendedInstanceType: recommendations,
+			Finding: *res.Finding,
+		}
+		instancesInfo = append(instancesInfo, info.InstanceInfo{
+			InstanceId:   instanceId,
+			Recommendations: rec,
+		})
 	}
 	return instancesInfo
 }

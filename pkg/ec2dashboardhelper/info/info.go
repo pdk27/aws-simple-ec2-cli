@@ -24,7 +24,7 @@ type InstanceInfo struct {
 	AvgCostPerPeriod  AvgCostPerPeriod
 
 	UsageInfo 		InstanceUsageInfo
-	Recommendation string
+	Recommendations Recommendation
 
 	// derived values
 	CostEffectivenessFactor	int  // percentage, better name?
@@ -49,7 +49,7 @@ type InstanceUsageInfo struct {
 
 type Recommendation struct {
 	Finding string
-	RecommendedInstanceType string
+	RecommendedInstanceType []string
 	SavingsPercentage int
 }
 
@@ -88,20 +88,23 @@ func PrintTable(instancesInfo []InstanceInfo) {
 		cef := fmt.Sprintf("%d", getCostEffectivenessFactor(i))
 		//ebs := fmt.Sprintf("%s", i.EbsAttached)
 		c := fmt.Sprintf("%+v", i.AvgCostPerPeriod)
+		fi := fmt.Sprintf("%+v", i.Recommendations.Finding)
+		rec := fmt.Sprintf("%+v", i.Recommendations.RecommendedInstanceType)
+
 		cu := fmt.Sprintf("%d", i.UsageInfo.AvgCpuCreditUsagePercentage)
 		ni := fmt.Sprintf("%d", i.UsageInfo.AvgNetworkIn)
 		no := fmt.Sprintf("%d", i.UsageInfo.AvgNetworkOut)
 		cp := fmt.Sprintf("%d", i.UsageInfo.AvgCpuCreditUsagePercentage)
 		cs := fmt.Sprintf("%d", i.UsageInfo.MaxCPUSurplusCreditsCharged)
 
-		row := []string{i.InstanceId, i.InstanceType, i.Recommendation, cef, c, cu, ni, no, cp, cs}
+		row := []string{i.InstanceId, i.InstanceType, fi, rec, cef, c, cu, ni, no, cp, cs}
 		//indexedOptions = append(indexedOptions, "Capacity Type")
 
 		// Append the main row
 		data = append(data, row)
 	}
 
-	header := []string{"Instance_Id", "Type", "Recommended Instance Type", "Cost_Effectiveness_Factor", "Avg_Cost", "Avg_Cpu_Utilization %", "Avg_Network_In",
+	header := []string{"Instance_Id", "Type", "Finding", "Recommended Instance Type", "Cost_Effectiveness_Factor", "Avg_Cost", "Avg_Cpu_Utilization %", "Avg_Network_In",
 		"Avg_Network_Out", "Avg_Cpu_Credit_Usage %", "Max_CPU_Surplus_Credits_Charged"}
 	optionsText := table.BuildTable(data, header)
 	fmt.Print(optionsText)
