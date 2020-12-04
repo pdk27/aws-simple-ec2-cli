@@ -179,7 +179,6 @@ func populateCommonInstanceInfo(regionFilter string, results []*costexplorer.Res
 			for _, k := range g.Keys {
 				regionMatched, _ := regexp.Match(regionPattern, []byte(*k))
 				typeMatched, _ := regexp.Match(instanceTypePattern, []byte(*k))
-				fmt.Println(id, *k)
 
 				// instance id
 				if strings.Contains(*k, "i-") {

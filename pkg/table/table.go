@@ -44,6 +44,17 @@ func BuildTable(data [][]string, header []string) string {
 		table.SetHeader(header)
 	}
 
+	table.SetHeaderColor(
+		tablewriter.Colors{tablewriter.Bold, tablewriter.BgGreenColor},
+		tablewriter.Colors{tablewriter.Bold, tablewriter.BgGreenColor},
+		tablewriter.Colors{tablewriter.Bold, tablewriter.BgGreenColor},
+		tablewriter.Colors{tablewriter.Bold, tablewriter.BgGreenColor},
+		tablewriter.Colors{tablewriter.Bold, tablewriter.BgGreenColor},
+		tablewriter.Colors{tablewriter.Bold, tablewriter.BgGreenColor},
+		tablewriter.Colors{tablewriter.Bold, tablewriter.BgGreenColor},
+		tablewriter.Colors{tablewriter.Bold, tablewriter.BgGreenColor},
+		tablewriter.Colors{tablewriter.Bold, tablewriter.BgGreenColor},
+	)
 	table.Render()
 	tableString := tableBuilder.String()
 
