@@ -66,9 +66,12 @@ func dashboard(cmd *cobra.Command, args []string) {
 
 	printFlags(cmd.Flags())
 	fmt.Println("Configuration Used: ")
-	fmt.Printf("%+v\n\n", config)
+	fmt.Printf("\t* Region: %s\n", config.Region)
+	fmt.Printf("\t* Granularity: %s\n", config.Granularity)
+	fmt.Printf("\t* CostTypes: %s\n", config.CostType)
+	fmt.Printf("\t* EvaluationPeriodInDays: %s\n", config.EvaluationPeriodInDays)
 
-	notes := "NOTE: " +
+	notes := "\nNOTE: " +
 		"\n\t* All costs are in USD" +
 		"\n\t* Averages and max values showed below are calculated over the configured evaluation period."
 	fmt.Println(notes)

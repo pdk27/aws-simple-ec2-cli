@@ -108,7 +108,7 @@ func PrintTable(result map[string]InstanceInfo) {
 
 	cef := make(map[string]int64)
 	var min, max int64
-	//var od, spot int
+	var od, spot float64
 	for _, ins := range instancesInfo {
 		c := getCostEffectivenessFactor(ins)
 		cef[ins.InstanceId] = c
@@ -124,8 +124,17 @@ func PrintTable(result map[string]InstanceInfo) {
 			max = c
 		}
 
-		//if strings.Contains(ins.CapacityType, "Spot")
+		if strings.Contains(ins.CapacityType, "Spot") {
+			spot++
+		}
+		if strings.Contains(ins.CapacityType, "On Demand") {
+			od++
+		}
 	}
+
+	spotod := spot + od
+	spotometer := spot / spotod * 100
+	//fmt.Printf("%d %d %.2f", spot, od, spotometer)
 
 	for _, i := range instancesInfo {
 		ncef := getNormalizedCostEffectivenessFactor(cef[i.InstanceId], min, max)
@@ -157,6 +166,11 @@ func PrintTable(result map[string]InstanceInfo) {
 
 	if data != nil {
 		table := table.BuildTable(data, header)
+		if spotometer < 20 {
+			fmt.Printf("\nSpot-o-Meter: %.2f%% (You are missing out!)\n\n", spotometer)
+		} else {
+			fmt.Printf("\nSpot-o-Meter: %.2f%% (yayy!)\n\n", spotometer)
+		}
 		fmt.Print(table)
 		fmt.Println("\n\n")
 	}
