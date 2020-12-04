@@ -18,10 +18,12 @@ type InstanceInfo struct {
 	InstanceId        string
 	//InstanceName      string
 	InstanceType      string
+	CapacityType		string
 	Region 			  string
 	//EbsAttached       string
 	//CPUCreditsBalance float64
-	AvgCostPerPeriod  AvgCostPerPeriod
+	AvgCostPerPeriod  CostPerPeriod
+	TotalCostPerPeriod	CostPerPeriod
 
 	UsageInfo 		InstanceUsageInfo
 	Recommendations Recommendation
@@ -48,12 +50,18 @@ type InstanceUsageInfo struct {
 }
 
 type Recommendation struct {
+	InstanceId        string
 	Finding string
-	RecommendedInstanceType []string
+	RecommendedInstanceTypesWithRank []RecommendedType
 	SavingsPercentage int
 }
 
-type AvgCostPerPeriod struct {
+type RecommendedType struct {
+	InstanceType string
+	Rank string
+}
+
+type CostPerPeriod struct {
 	Amortized string
 	Blended 	string
 	//NetAmortized	string
@@ -80,7 +88,13 @@ type GenericInfo struct {
 	LastFetchedAt			time.Time
 }
 
-func PrintTable(instancesInfo []InstanceInfo) {
+func PrintTable(result map[string]InstanceInfo) {
+	fmt.Println(len(result))
+	instancesInfo := make([]InstanceInfo, 0, len(result))
+	for _,v := range result {
+		instancesInfo = append(instancesInfo, v)
+	}
+
 	var data [][]string
 	//var indexedOptions []string
 
@@ -89,7 +103,7 @@ func PrintTable(instancesInfo []InstanceInfo) {
 		//ebs := fmt.Sprintf("%s", i.EbsAttached)
 		c := fmt.Sprintf("%+v", i.AvgCostPerPeriod)
 		fi := fmt.Sprintf("%+v", i.Recommendations.Finding)
-		rec := fmt.Sprintf("%+v", i.Recommendations.RecommendedInstanceType)
+		rec := fmt.Sprintf("%+v", i.Recommendations.RecommendedInstanceTypesWithRank)
 
 		cu := fmt.Sprintf("%d", i.UsageInfo.AvgCpuCreditUsagePercentage)
 		ni := fmt.Sprintf("%d", i.UsageInfo.AvgNetworkIn)
@@ -97,18 +111,19 @@ func PrintTable(instancesInfo []InstanceInfo) {
 		cp := fmt.Sprintf("%d", i.UsageInfo.AvgCpuCreditUsagePercentage)
 		cs := fmt.Sprintf("%d", i.UsageInfo.MaxCPUSurplusCreditsCharged)
 
-		row := []string{i.InstanceId, i.Region, i.InstanceType, fi, rec, cef, c, cu, ni, no, cp, cs}
+		row := []string{i.InstanceId, i.InstanceType, i.CapacityType, i.Region, fi, rec, cef, c, cu, ni, no, cp, cs}
 		//indexedOptions = append(indexedOptions, "Capacity Type")
 
-		// Append the main row
 		data = append(data, row)
 	}
 
-	header := []string{"Instance_Id", "Region", "Type", "Finding", "Recommended Instance Type", "Cost_Effectiveness_Factor", "Avg_Cost", "Avg_Cpu_Utilization %", "Avg_Network_In",
+	header := []string{"Instance_Id", "Type", "CapacityType", "Region", "Finding", "Recommended Instance Types", "Cost_Effectiveness_Factor", "Avg_Cost", "Avg_Cpu_Utilization %", "Avg_Network_In",
 		"Avg_Network_Out", "Avg_Cpu_Credit_Usage %", "Max_CPU_Surplus_Credits_Charged"}
+
 	if data != nil {
-		optionsText := table.BuildTable(data, header)
-		fmt.Print(optionsText)
+		table := table.BuildTable(data, header)
+		fmt.Print(table)
+		fmt.Println("\n\n")
 	}
 }
 
@@ -117,4 +132,47 @@ func getCostEffectivenessFactor(info InstanceInfo) int {
 	return 0
 }
 
+func Merge(src map[string]InstanceInfo, dest map[string]InstanceInfo) map[string]InstanceInfo{
+	for k, v := range src {
+		fmt.Println(k)
+		fmt.Printf("%+v", v)
+		v.merge(dest[k])
+	}
+
+	return src
+}
+
+func (insInf InstanceInfo) merge(insInfoToMerge InstanceInfo) {
+	if insInf.InstanceId == "" {
+		insInf.InstanceId = insInfoToMerge.InstanceId
+	}
+
+	if insInf.InstanceType == "" {
+		insInf.InstanceType = insInfoToMerge.InstanceType
+	}
+
+	if insInf.CapacityType == "" {
+		insInf.CapacityType = insInfoToMerge.CapacityType
+	}
+
+	if insInf.Region == "" {
+		insInf.Region = insInfoToMerge.Region
+	}
+
+	if insInf.AvgCostPerPeriod == (CostPerPeriod{}) {
+		insInf.AvgCostPerPeriod = insInfoToMerge.AvgCostPerPeriod
+	}
+
+	if insInf.UsageInfo == (InstanceUsageInfo{}) {
+		insInf.UsageInfo = insInfoToMerge.UsageInfo
+	}
+
+	if insInf.Recommendations.InstanceId == "" {
+		insInf.Recommendations = insInfoToMerge.Recommendations
+	}
+
+	if insInf.CostEffectivenessFactor == 0 {
+		insInf.CostEffectivenessFactor = insInfoToMerge.CostEffectivenessFactor
+	}
+}
 

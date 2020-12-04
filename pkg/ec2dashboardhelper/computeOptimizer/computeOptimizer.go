@@ -1,19 +1,26 @@
 package computeOptimizer
 
 import (
+	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/computeoptimizer"
 	"simple-ec2/pkg/ec2dashboardhelper/config"
 	"simple-ec2/pkg/ec2dashboardhelper/info"
 	"strings"
+	"github.com/aws/aws-sdk-go/aws/session"
 )
 
 
-func GetRecommendation(cfg config.Config, instancesInfo []info.InstanceInfo) []info.InstanceInfo {
-	client := computeoptimizer.New(cfg.AWSSession)
+func PopulateRecommendations(cfg config.Config) map[string]info.InstanceInfo {
+
+	sess, _ := session.NewSession(&aws.Config{
+		//Region: aws.String(cfg.Region),
+	})
+	client := computeoptimizer.New(sess)
+	instancesInfo := make(map[string]info.InstanceInfo)
 
 	// Hard-code accountID for now
-	accountId := aws.String("xxxxxx")
+	accountId := aws.String("xxx")
 	params := computeoptimizer.GetEC2InstanceRecommendationsInput{
 		AccountIds: aws.StringSlice([]string{*accountId}),
 	}
@@ -22,22 +29,29 @@ func GetRecommendation(cfg config.Config, instancesInfo []info.InstanceInfo) []i
 		panic(err)
 	}
 
+	//fmt.Println(len(result.InstanceRecommendations))
 	for _, res := range result.InstanceRecommendations {
-		region := strings.Split(*res.InstanceArn, ":")[3]
 		instanceId := strings.Split(*res.InstanceArn, "/")[1]
-		recommendations := []string{}
-		for _, g := range res.RecommendationOptions {
-			recommendations = append(recommendations, *g.InstanceType)
-		}
-		rec := info.Recommendation{
-			RecommendedInstanceType: recommendations,
+		region := strings.Split(*res.InstanceArn, ":")[3]
+
+		var insInf info.InstanceInfo
+		reco := info.Recommendation{
+			InstanceId:   instanceId,
 			Finding: *res.Finding,
 		}
-		instancesInfo = append(instancesInfo, info.InstanceInfo{
-			InstanceId:   instanceId,
-			Recommendations: rec,
-			Region: region,
-		})
+
+		var rs []info.RecommendedType // collect recommended types and ranks
+		for _, g := range res.RecommendationOptions {
+			rs = append(rs, info.RecommendedType{
+				InstanceType: *g.InstanceType,
+				Rank: fmt.Sprintf("%d", *g.Rank)})
+		}
+		reco.RecommendedInstanceTypesWithRank = rs
+
+		insInf.Recommendations = reco
+		insInf.Region = region
+		instancesInfo[instanceId] = insInf
 	}
+	//fmt.Println(len(instancesInfo))
 	return instancesInfo
 }

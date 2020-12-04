@@ -5,30 +5,13 @@ import (
 	"simple-ec2/pkg/ec2dashboardhelper/info"
 	"strconv"
 	"strings"
+	"regexp"
 	"time"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/costexplorer"
 
 	"simple-ec2/pkg/ec2dashboardhelper/config"
 )
-//
-//type CostTracker struct {
-//	//ByInstanceType []Item
-//	//ByRegion []Item
-//	ByCapacityType []Item // spot or on-demand
-//	ByResource []Item
-//	CostUnit string
-//	Period int
-//}
-//
-//type Item struct {
-//	Key string
-//	Value string
-//}
-//
-//type Ec2SpotTracker struct {
-//	SpotRunningPercentage int // cost explorer API: spot/ total ec2 running
-//}
 
 //https://aws.amazon.com/blogs/aws-cost-management/understanding-your-aws-cost-datasets-a-cheat-sheet/
 type CostType int
@@ -45,12 +28,15 @@ func (c CostType) String() string {
 
 const (
     layout = "2006-01-02"
+    regionPattern = "(us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\\d"
 )
 
-func PopulateCosts(cfg config.Config, instancesInfo []info.InstanceInfo) []info.InstanceInfo {
-	client := costexplorer.New(cfg.AWSSession)
+var	client *costexplorer.CostExplorer
 
+func PopulateCostsAndType(cfg config.Config) map[string]info.InstanceInfo {
 	var groupBys []*costexplorer.GroupDefinition
+
+	client = costexplorer.New(cfg.AWSSession)
 
 	// group by resource is a must
 	groupBys = append(groupBys, &costexplorer.GroupDefinition{
@@ -60,24 +46,54 @@ func PopulateCosts(cfg config.Config, instancesInfo []info.InstanceInfo) []info.
 	groupBys = append(groupBys, &costexplorer.GroupDefinition{
 		Type: aws.String(costexplorer.GroupDefinitionTypeDimension), Key: aws.String(costexplorer.DimensionInstanceType)})
 
-	// append ByRegion
-	//groupBys = append(groupBys, &costexplorer.GroupDefinition{
-	//	Type: aws.String(costexplorer.GroupDefinitionTypeDimension), Key: aws.String(costexplorer.DimensionRegion)})
+	return getCostsWithGroupBy(cfg, groupBys)
+}
+
+func PopulateCapacityType(cfg config.Config) map[string]info.InstanceInfo {
+	var groupBys []*costexplorer.GroupDefinition
+
+	// group by resource is a must
+	groupBys = append(groupBys, &costexplorer.GroupDefinition{
+		Type: aws.String(costexplorer.GroupDefinitionTypeDimension), Key: aws.String(costexplorer.DimensionResourceId)})
 
 	// append ByCapacityType
-	//groupBys = append(groupBys, &costexplorer.GroupDefinition{
-	//	Type: aws.String(costexplorer.GroupDefinitionTypeDimension), Key: aws.String(costexplorer.DimensionPurchaseType)})
+	groupBys = append(groupBys, &costexplorer.GroupDefinition{
+		Type: aws.String(costexplorer.GroupDefinitionTypeDimension), Key: aws.String(costexplorer.DimensionPurchaseType)})
 
-	return getCostsWithGroupBy(client, cfg, groupBys, instancesInfo)
+	return getCostsWithGroupBy(cfg, groupBys)
+}
+
+func PopulateRegion(cfg config.Config) map[string]info.InstanceInfo {
+	var groupBys []*costexplorer.GroupDefinition
+
+	// group by resource is a must
+	groupBys = append(groupBys, &costexplorer.GroupDefinition{
+		Type: aws.String(costexplorer.GroupDefinitionTypeDimension), Key: aws.String(costexplorer.DimensionResourceId)})
+
+	if cfg.Region == "" {
+		// append ByRegion
+		groupBys = append(groupBys, &costexplorer.GroupDefinition{
+			Type: aws.String(costexplorer.GroupDefinitionTypeDimension), Key: aws.String(costexplorer.DimensionRegion)})
+	}
+	return getCostsWithGroupBy(cfg, groupBys)
 }
 
 func getCostsWithGroupBy(
-	client *costexplorer.CostExplorer,
 	cfg config.Config,
-	groupBy []*costexplorer.GroupDefinition,
-	instancesInfoInput []info.InstanceInfo) []info.InstanceInfo {
+	groupBy []*costexplorer.GroupDefinition) map[string]info.InstanceInfo {
 
 	// todo: validations
+
+	reqInput := getReqInputWithCommonParams(cfg, groupBy)
+	result := getCostAndUsageOutput(reqInput)
+
+	instancesInfo, blendedCostsById, amortizedCostsById := populateCommonInstanceInfo(result.ResultsByTime)
+	instancesInfo = populateCosts(instancesInfo, blendedCostsById, amortizedCostsById)
+
+	return instancesInfo
+}
+
+func getReqInputWithCommonParams(cfg config.Config, groupBy []*costexplorer.GroupDefinition) costexplorer.GetCostAndUsageWithResourcesInput {
 
 	var costType []*string
 	for _, ct := range strings.Split(cfg.CostType, ",") {
@@ -92,6 +108,7 @@ func getCostsWithGroupBy(
 	}
 
 	// always use the filters
+	//https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/ce-filtering.html
 	var andFilters []*costexplorer.Expression
 	svcFilter := &costexplorer.Expression{
 		Dimensions: &costexplorer.DimensionValues{
@@ -109,7 +126,7 @@ func getCostsWithGroupBy(
 	}
 	andFilters = append(andFilters, usageTypeGroupFilter)
 
-	if cfg.Region == "" {
+	if cfg.Region != "" {
 		regionFilter := &costexplorer.Expression{
 			Dimensions: &costexplorer.DimensionValues{
 				Key: aws.String("REGION"),
@@ -120,41 +137,56 @@ func getCostsWithGroupBy(
 	}
 	filters := &costexplorer.Expression{And: andFilters}
 
-	//https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/ce-filtering.html
-	reqInput := costexplorer.GetCostAndUsageWithResourcesInput{
+	//fmt.Println(cfg)
+	return costexplorer.GetCostAndUsageWithResourcesInput{
 		Granularity: aws.String(cfg.Granularity),
 		Metrics:     costType,
-		GroupBy:     groupBy,
+		GroupBy: groupBy,
 		TimePeriod:  timePeriod,
 		Filter:		 filters,
 	}
+}
 
-	result, err := client.GetCostAndUsageWithResources(&reqInput)
+func getCostAndUsageOutput(
+	input costexplorer.GetCostAndUsageWithResourcesInput) costexplorer.GetCostAndUsageWithResourcesOutput {
+	output, err := client.GetCostAndUsageWithResources(&input)
 
 	if err != nil {
 		panic(err)
 	}
+	return *output
+}
 
-	//fmt.Printf("%+v\n\n\n", result)
-
-	instanceTypeById := make(map[string]string) // {instanceId: X, type: Y}
+func populateCommonInstanceInfo(results []*costexplorer.ResultByTime) (map[string]info.InstanceInfo, map[string][]string, map[string][]string) {
+	//instanceTypeById := make(map[string]string) // {instanceId: X, type: Y}
 	blendedCostsPerInstance := make(map[string][]string) // {instanceId: X, blendedCost: Y}
 	//unblendedCostsPerInstance := make(map[string][]string)// {instanceId: X, unblendedCost: Y}
 	amortizedCostsPerInstance := make(map[string][]string)// {instanceId: X, amortizedCost: Y}
-	for _, res := range result.ResultsByTime {
-		var id, iType string
-		for _, g := range res.Groups {
-			fmt.Println(g)
 
-			keys := g.Keys
-			if strings.Contains(*keys[0], "i-") {
-				id = *keys[0]
-				iType = *keys[1]
-			} else {
-				id = *keys[1]
-				iType = *keys[0]
+	instancesInfo := make(map[string]info.InstanceInfo)
+	for _, res := range results {
+		var info info.InstanceInfo
+		var id string
+		for _, g := range res.Groups {
+			//fmt.Println(g)
+
+			// there can be a msx of 2 keys
+			for _, k := range g.Keys {
+				matched, _ := regexp.Match(regionPattern, []byte(*k))
+
+				// instance id
+				if strings.Contains(*k, "i-") {
+					id = *k
+					info.InstanceId = *k
+				} else if strings.Contains(*k, "On Demand") || strings.Contains(*k, "Spot")  {
+					info.CapacityType = *k
+				} else if matched {
+					info.Region = *k
+				} else {
+					// instance type
+					info.InstanceType = *k
+				}
 			}
-			instanceTypeById[id] = iType
 
 			// populate the map to calculate avg later
 			bCosts := blendedCostsPerInstance[id]
@@ -169,82 +201,47 @@ func getCostsWithGroupBy(
 			amCosts = append(amCosts, *g.Metrics["AmortizedCost"].Amount)
 			amortizedCostsPerInstance[id] = amCosts
 		}
+		instancesInfo[id] = info
 	}
+	return instancesInfo, blendedCostsPerInstance, amortizedCostsPerInstance
+}
 
-	var instancesInfo []info.InstanceInfo
-	//fmt.Println(len(instancesInfoInput), instancesInfoInput)
-	if len(instancesInfoInput) != 0 {
-		for _, i := range instancesInfoInput {
-			var blendedSum, amortizedSum float64
-			for _, c := range blendedCostsPerInstance[i.InstanceId] {
-				cost, err := strconv.ParseFloat(c, 64)
-				if err == nil {
-					blendedSum += cost
-				}
-			}
-			blendedAvg := (blendedSum) / float64(len(blendedCostsPerInstance[i.InstanceId]))
-
-			//for _, c := range unblendedCostsPerInstance[i.InstanceId] {
-			//	cost, err := strconv.ParseFloat(c, 64)
-			//	if err == nil {
-			//		unblendedSum += cost
-			//	}
-			//}
-			//unblendedAvg := (unblendedSum) / float64(len(unblendedCostsPerInstance[i.InstanceId]))
-
-			for _, c := range amortizedCostsPerInstance[i.InstanceId] {
-				cost, err := strconv.ParseFloat(c, 64)
-				if err == nil {
-					amortizedSum += cost
-				}
-			}
-			amortizedAvg := (amortizedSum) / float64(len(amortizedCostsPerInstance[i.InstanceId]))
-
-			i.AvgCostPerPeriod = info.AvgCostPerPeriod{
-				Blended: fmt.Sprintf("%.4f", blendedAvg),
-				Amortized: fmt.Sprintf("%.4f", amortizedAvg),
+func populateCosts(instancesInfo map[string]info.InstanceInfo, blendedCostsById map[string][]string, amortizedCostsById map[string][]string) map[string]info.InstanceInfo {
+	for id, inf := range instancesInfo {
+		// add costs
+		var blendedSum, amortizedSum float64
+		for _, c := range blendedCostsById[id] {
+			cost, err := strconv.ParseFloat(c, 64)
+			if err == nil {
+				blendedSum += cost
 			}
 		}
-		instancesInfo = instancesInfoInput
-	} else {
-		// temporary build logic
-		for id, iType := range instanceTypeById {
-			var blendedSum, amortizedSum float64
-			for _, c := range blendedCostsPerInstance[id] {
-				cost, err := strconv.ParseFloat(c, 64)
-				if err == nil {
-					blendedSum += cost
-				}
+		blendedAvg := (blendedSum) / float64(len(blendedCostsById[id]))
+
+		//for _, c := range unblendedCostsPerInstance[i.InstanceId] {
+		//	cost, err := strconv.ParseFloat(c, 64)
+		//	if err == nil {
+		//		unblendedSum += cost
+		//	}
+		//}
+		//unblendedAvg := (unblendedSum) / float64(len(unblendedCostsPerInstance[i.InstanceId]))
+
+		for _, c := range amortizedCostsById[id] {
+			cost, err := strconv.ParseFloat(c, 64)
+			if err == nil {
+				amortizedSum += cost
 			}
-			blendedAvg := (blendedSum) / float64(len(blendedCostsPerInstance[id]))
+		}
+		amortizedAvg := (amortizedSum) / float64(len(amortizedCostsById[id]))
 
-			//for _, c := range unblendedCostsPerInstance[id] {
-			//	cost, err := strconv.ParseFloat(c, 64)
-			//	if err == nil {
-			//		unblendedSum += cost
-			//	}
-			//}
-			//unblendedAvg := (unblendedSum) / float64(len(unblendedCostsPerInstance[id]))
-
-			for _, c := range amortizedCostsPerInstance[id] {
-				cost, err := strconv.ParseFloat(c, 64)
-				if err == nil {
-					amortizedSum += cost
-				}
-			}
-			amortizedAvg := (amortizedSum) / float64(len(amortizedCostsPerInstance[id]))
-
-			instancesInfo = append(instancesInfo, info.InstanceInfo{
-				InstanceId: id,
-				InstanceType: iType,
-				Region: cfg.Region,
-				AvgCostPerPeriod: info.AvgCostPerPeriod{
-					Blended: fmt.Sprintf("%.4f", blendedAvg),
-					Amortized: fmt.Sprintf("%.4f", amortizedAvg),
-				},
-			})
+		inf.AvgCostPerPeriod = info.CostPerPeriod{
+			Blended: fmt.Sprintf("%.4f", blendedAvg),
+			Amortized: fmt.Sprintf("%.4f", amortizedAvg),
+		}
+		inf.TotalCostPerPeriod = info.CostPerPeriod{
+			Blended: fmt.Sprintf("%.4f", blendedSum),
+			Amortized: fmt.Sprintf("%.4f", amortizedSum),
 		}
 	}
-
 	return instancesInfo
 }

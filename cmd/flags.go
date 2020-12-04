@@ -33,6 +33,7 @@ var (
 	granularityFlag 	 string
 	costTypeFlag         string
 	evalPeriodInDaysFlag int
+	showCostsByCategoriesFlag bool
 )
 
 var flagConfig = config.SimpleInfo{}

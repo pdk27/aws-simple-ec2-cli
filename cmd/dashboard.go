@@ -43,6 +43,7 @@ func init() {
 	dashboardCmd.Flags().StringVarP(&costTypeFlag, "costType", "c", "BlendedCost,AmortizedCost",
 		"The type of costs. Choose from [AmortizedCost, BlendedCost, NetAmortizedCost, NetUnblendedCost, UnblendedCost] (Default: 'BlendedCost','UnblendedCost'")
 	dashboardCmd.Flags().IntVarP(&evalPeriodInDaysFlag, "evaluationPeriodInDays", "p", 7, "The evaluation period for costs and metrics in days. (Default: 7)")
+	dashboardCmd.Flags().BoolVarP(&showCostsByCategoriesFlag, "costByCategories", "t", true, "Whether to show costs by categories, region, purchase type, instance type. (Default: false)")
 }
 
 // The main function
@@ -59,6 +60,7 @@ func dashboard(cmd *cobra.Command, args []string) {
 		Granularity: granularityFlag,
 		CostType: costTypeFlag,
 		EvaluationPeriodInDays: evalPeriodInDaysFlag,
+		ShowCostsByCategories: showCostsByCategoriesFlag,
 	}
 	ec2helper.GetDefaultRegion(sess)
 
@@ -73,17 +75,20 @@ func dashboard(cmd *cobra.Command, args []string) {
 
 // Fetch dashboard summary for AWS resources
 func dashboardSummary(config config.Config) {
-	h := ec2helper.New(config.AWSSession)
+	//h := ec2helper.New(config.AWSSession)
 
+	fmt.Println(config)
 	var err error
+	// TODO panic: runtime error: invalid memory address or nil pointer dereference when uncommented
 	// Override region if specified
-	if regionFlag != "" {
-		h.ChangeRegion(regionFlag)
-		//err = GetDashboardSummaryForRegion(h)
-		ec2dashboardhelper.GenerateDashboardForRegionWithEverything(config)
-	} else {
-		err = GetDashboardSummaryWorldWide(h)
-	}
+	//if regionFlag != "" {
+	//	h.ChangeRegion(regionFlag)
+	//	err = GetDashboardSummaryForRegion(h, cfg)
+	//} else {
+	//	err = GetDashboardSummaryWorldWide(h, cfg)
+	//}
+
+	ec2dashboardhelper.GenerateDashboardWithEverything(config)
 
 	if cli.ShowError(err, "Generating dashboard failed") {
 		return
@@ -97,14 +102,14 @@ func ValidateDashboardFlags() bool {
 }
 
 // Get the information of the instance and connect to it
-func GetDashboardSummaryForRegion(h *ec2helper.EC2Helper) error {
-	ec2dashboardhelper.GenerateDashboardForRegion(h)
+func GetDashboardSummaryForRegion(h *ec2helper.EC2Helper, config config.Config) error {
+	ec2dashboardhelper.GenerateDashboardForRegion(h, config)
 	return nil
 }
 
 // Get the information of the instance and connect to it
-func GetDashboardSummaryWorldWide(h *ec2helper.EC2Helper) error {
-	err := ec2dashboardhelper.GenerateDashboardWorldWide(h)
+func GetDashboardSummaryWorldWide(h *ec2helper.EC2Helper, config config.Config) error {
+	err := ec2dashboardhelper.GenerateDashboardWorldWide(h, config)
 	if err != nil {
 		return err
 	}
