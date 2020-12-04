@@ -29,6 +29,7 @@ func (c CostType) String() string {
 const (
     layout = "2006-01-02"
     regionPattern = "(us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\\d"
+    instanceTypePattern = "[a-zA-Z][0-9][a-zA-Z]*\\.[0-9]*[a-zA-Z]+" // i-09bdb27b3fcb0cf92 t2.small
 )
 
 var	client *costexplorer.CostExplorer
@@ -36,7 +37,9 @@ var	client *costexplorer.CostExplorer
 func PopulateCostsAndType(cfg config.Config) map[string]info.InstanceInfo {
 	var groupBys []*costexplorer.GroupDefinition
 
-	client = costexplorer.New(cfg.AWSSession)
+	client = costexplorer.New(cfg.AWSSession, &aws.Config{
+		Region: aws.String(cfg.Region),
+	})
 
 	// group by resource is a must
 	groupBys = append(groupBys, &costexplorer.GroupDefinition{
@@ -70,11 +73,9 @@ func PopulateRegion(cfg config.Config) map[string]info.InstanceInfo {
 	groupBys = append(groupBys, &costexplorer.GroupDefinition{
 		Type: aws.String(costexplorer.GroupDefinitionTypeDimension), Key: aws.String(costexplorer.DimensionResourceId)})
 
-	if cfg.Region == "" {
-		// append ByRegion
-		groupBys = append(groupBys, &costexplorer.GroupDefinition{
-			Type: aws.String(costexplorer.GroupDefinitionTypeDimension), Key: aws.String(costexplorer.DimensionRegion)})
-	}
+	// append ByRegion
+	groupBys = append(groupBys, &costexplorer.GroupDefinition{
+		Type: aws.String(costexplorer.GroupDefinitionTypeDimension), Key: aws.String(costexplorer.DimensionRegion)})
 	return getCostsWithGroupBy(cfg, groupBys)
 }
 
@@ -86,8 +87,11 @@ func getCostsWithGroupBy(
 
 	reqInput := getReqInputWithCommonParams(cfg, groupBy)
 	result := getCostAndUsageOutput(reqInput)
+	//fmt.Println(result)
 
-	instancesInfo, blendedCostsById, amortizedCostsById := populateCommonInstanceInfo(result.ResultsByTime)
+	instancesInfo, blendedCostsById, amortizedCostsById := populateCommonInstanceInfo(cfg.Region, result.ResultsByTime)
+	//fmt.Println(blendedCostsById)
+	//fmt.Println(amortizedCostsById)
 	instancesInfo = populateCosts(instancesInfo, blendedCostsById, amortizedCostsById)
 
 	return instancesInfo
@@ -154,10 +158,12 @@ func getCostAndUsageOutput(
 	if err != nil {
 		panic(err)
 	}
+
+	//fmt.Println(output)
 	return *output
 }
 
-func populateCommonInstanceInfo(results []*costexplorer.ResultByTime) (map[string]info.InstanceInfo, map[string][]string, map[string][]string) {
+func populateCommonInstanceInfo(regionFilter string, results []*costexplorer.ResultByTime) (map[string]info.InstanceInfo, map[string][]string, map[string][]string) {
 	//instanceTypeById := make(map[string]string) // {instanceId: X, type: Y}
 	blendedCostsPerInstance := make(map[string][]string) // {instanceId: X, blendedCost: Y}
 	//unblendedCostsPerInstance := make(map[string][]string)// {instanceId: X, unblendedCost: Y}
@@ -165,14 +171,15 @@ func populateCommonInstanceInfo(results []*costexplorer.ResultByTime) (map[strin
 
 	instancesInfo := make(map[string]info.InstanceInfo)
 	for _, res := range results {
-		var info info.InstanceInfo
-		var id string
 		for _, g := range res.Groups {
-			//fmt.Println(g)
+			var info info.InstanceInfo
+			var id string
 
-			// there can be a msx of 2 keys
+			// there can be a max of 2 keys
 			for _, k := range g.Keys {
-				matched, _ := regexp.Match(regionPattern, []byte(*k))
+				regionMatched, _ := regexp.Match(regionPattern, []byte(*k))
+				typeMatched, _ := regexp.Match(instanceTypePattern, []byte(*k))
+				fmt.Println(id, *k)
 
 				// instance id
 				if strings.Contains(*k, "i-") {
@@ -180,13 +187,19 @@ func populateCommonInstanceInfo(results []*costexplorer.ResultByTime) (map[strin
 					info.InstanceId = *k
 				} else if strings.Contains(*k, "On Demand") || strings.Contains(*k, "Spot")  {
 					info.CapacityType = *k
-				} else if matched {
+				}  else if regionMatched {
 					info.Region = *k
-				} else {
+				} else if typeMatched {
 					// instance type
 					info.InstanceType = *k
+				} else {
+					// nothing
 				}
 			}
+			if regionFilter != "" {
+				info.Region = regionFilter
+			}
+			instancesInfo[id] = info
 
 			// populate the map to calculate avg later
 			bCosts := blendedCostsPerInstance[id]
@@ -201,12 +214,13 @@ func populateCommonInstanceInfo(results []*costexplorer.ResultByTime) (map[strin
 			amCosts = append(amCosts, *g.Metrics["AmortizedCost"].Amount)
 			amortizedCostsPerInstance[id] = amCosts
 		}
-		instancesInfo[id] = info
 	}
+
 	return instancesInfo, blendedCostsPerInstance, amortizedCostsPerInstance
 }
 
 func populateCosts(instancesInfo map[string]info.InstanceInfo, blendedCostsById map[string][]string, amortizedCostsById map[string][]string) map[string]info.InstanceInfo {
+	var result = make(map[string]info.InstanceInfo)
 	for id, inf := range instancesInfo {
 		// add costs
 		var blendedSum, amortizedSum float64
@@ -242,6 +256,7 @@ func populateCosts(instancesInfo map[string]info.InstanceInfo, blendedCostsById 
 			Blended: fmt.Sprintf("%.4f", blendedSum),
 			Amortized: fmt.Sprintf("%.4f", amortizedSum),
 		}
+		result[id] = inf
 	}
-	return instancesInfo
+	return result
 }

@@ -65,6 +65,9 @@ func dashboard(cmd *cobra.Command, args []string) {
 	ec2helper.GetDefaultRegion(sess)
 
 	printFlags(cmd.Flags())
+	fmt.Println("Configuration Used: ")
+	fmt.Printf("%+v\n\n", config)
+
 	notes := "NOTE: " +
 		"\n\t* All costs are in USD" +
 		"\n\t* Averages and max values showed below are calculated over the configured evaluation period."
@@ -77,7 +80,6 @@ func dashboard(cmd *cobra.Command, args []string) {
 func dashboardSummary(config config.Config) {
 	//h := ec2helper.New(config.AWSSession)
 
-	fmt.Println(config)
 	var err error
 	// TODO panic: runtime error: invalid memory address or nil pointer dereference when uncommented
 	// Override region if specified

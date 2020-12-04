@@ -3,6 +3,8 @@ package ec2dashboardhelper
 import (
 	"fmt"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"simple-ec2/pkg/ec2dashboardhelper/cloudwatch"
+	"simple-ec2/pkg/ec2dashboardhelper/computeOptimizer"
 	"simple-ec2/pkg/ec2dashboardhelper/config"
 	"simple-ec2/pkg/ec2dashboardhelper/costTracker"
 	"simple-ec2/pkg/ec2dashboardhelper/info"
@@ -59,25 +61,34 @@ func GenerateDashboardWorldWide(h *ec2helper.EC2Helper, conf config.Config) erro
 func GenerateDashboardWithEverything(cfg config.Config) {
 	// create dashboard tracked by instance id
 	result := make(map[string]info.InstanceInfo)
-	//result = computeOptimizer.PopulateRecommendations(cfg)
+	result = computeOptimizer.PopulateRecommendations(cfg)
 	//info.PrintTable(result)
 
 	instancesInfoCosts := costTracker.PopulateCostsAndType(cfg)
+	//info.PrintTable(instancesInfoCosts)
 	result = info.Merge(instancesInfoCosts, result)
-	info.PrintTable(result)
 
-	//instancesInfoMetrics := cwMetrics.PopulateMetrics(cfg)
-	//result = info.Merge(instancesInfoCosts, result)
+	var instanceIds []string
+	for k := range result {
+		instanceIds = append(instanceIds, k)
+	}
+	instancesInfoMetrics := cloudwatch.PopulateMetrics(instanceIds, cfg)
+	//info.PrintTable(instancesInfoMetrics)
+	result = info.Merge(instancesInfoMetrics, result)
 
 	// print cost tracker tables by categories - these will be separate tables
 	if cfg.ShowCostsByCategories {
-		result = info.Merge(costTracker.PopulateRegion(cfg), result)
-		info.PrintTable(result)
+		if cfg.Region == "" {
+			result = info.Merge(costTracker.PopulateRegion(cfg), result)
+			//info.PrintTable(result)
+		} else {
+			// populate region
+		}
 		result = info.Merge(costTracker.PopulateCapacityType(cfg), result)
-		info.PrintTable(result)
+		//info.PrintTable(result)
 	}
 
-	//info.PrintTable(result)
+	info.PrintTable(result)
 }
 
 // Contains finds a string in the given array

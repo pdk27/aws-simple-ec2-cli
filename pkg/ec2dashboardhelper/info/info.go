@@ -3,6 +3,7 @@ package info
 import (
 	"fmt"
 	"simple-ec2/pkg/table"
+	"strconv"
 	"time"
 )
 
@@ -40,13 +41,18 @@ type InstanceInfo struct {
 
 type InstanceUsageInfo struct {
 	//AvgUsageHours	int
-	AvgCpuUtilPercentage int
-	AvgNetworkIn int
-	AvgNetworkOut int
-	AvgEbsReadBytesPerSec int
-	AvgEbsWriteBytesPerSec int
-	AvgCpuCreditUsagePercentage int // CPUCreditUsage / CPUCreditBalance
-	MaxCPUSurplusCreditsCharged int
+	CpuUtilPercentage Metric
+	NetworkIn Metric
+	NetworkOut Metric
+	EbsReadBytesPerSec Metric
+	EbsWriteBytesPerSec Metric
+	CpuCreditUsagePercentage Metric // CPUCreditUsage / CPUCreditBalance
+	MaxCPUSurplusCreditsCharged string
+}
+
+type Metric struct {
+	Avg string
+	Max string
 }
 
 type Recommendation struct {
@@ -89,27 +95,27 @@ type GenericInfo struct {
 }
 
 func PrintTable(result map[string]InstanceInfo) {
-	fmt.Println(len(result))
 	instancesInfo := make([]InstanceInfo, 0, len(result))
 	for _,v := range result {
 		instancesInfo = append(instancesInfo, v)
 	}
+	//fmt.Printf("%+v", instancesInfo)
 
 	var data [][]string
 	//var indexedOptions []string
 
 	for _, i := range instancesInfo {
-		cef := fmt.Sprintf("%d", getCostEffectivenessFactor(i))
+		cef := fmt.Sprintf("%0.4f", getCostEffectivenessFactor(i))
 		//ebs := fmt.Sprintf("%s", i.EbsAttached)
 		c := fmt.Sprintf("%+v", i.AvgCostPerPeriod)
 		fi := fmt.Sprintf("%+v", i.Recommendations.Finding)
 		rec := fmt.Sprintf("%+v", i.Recommendations.RecommendedInstanceTypesWithRank)
 
-		cu := fmt.Sprintf("%d", i.UsageInfo.AvgCpuCreditUsagePercentage)
-		ni := fmt.Sprintf("%d", i.UsageInfo.AvgNetworkIn)
-		no := fmt.Sprintf("%d", i.UsageInfo.AvgNetworkOut)
-		cp := fmt.Sprintf("%d", i.UsageInfo.AvgCpuCreditUsagePercentage)
-		cs := fmt.Sprintf("%d", i.UsageInfo.MaxCPUSurplusCreditsCharged)
+		cu := fmt.Sprintf("%+v", i.UsageInfo.CpuUtilPercentage)
+		ni := fmt.Sprintf("%+v", i.UsageInfo.NetworkIn)
+		no := fmt.Sprintf("%+v", i.UsageInfo.NetworkOut)
+		cp := fmt.Sprintf("%+v", i.UsageInfo.CpuCreditUsagePercentage)
+		cs := fmt.Sprintf("%+v", i.UsageInfo.MaxCPUSurplusCreditsCharged)
 
 		row := []string{i.InstanceId, i.InstanceType, i.CapacityType, i.Region, fi, rec, cef, c, cu, ni, no, cp, cs}
 		//indexedOptions = append(indexedOptions, "Capacity Type")
@@ -117,8 +123,8 @@ func PrintTable(result map[string]InstanceInfo) {
 		data = append(data, row)
 	}
 
-	header := []string{"Instance_Id", "Type", "CapacityType", "Region", "Finding", "Recommended Instance Types", "Cost_Effectiveness_Factor", "Avg_Cost", "Avg_Cpu_Utilization %", "Avg_Network_In",
-		"Avg_Network_Out", "Avg_Cpu_Credit_Usage %", "Max_CPU_Surplus_Credits_Charged"}
+	header := []string{"Instance Id", "Type", "Capacity Type", "Region", "Finding", "Recommended Instance Types", "Cost Effectiveness Factor", "Avg Cost", "Avg Cpu Utilization %", "Avg Network In",
+		"Avg Network Out", "Avg Cpu Credit Usage %", "Max CPU Surplus Credits Charged"}
 
 	if data != nil {
 		table := table.BuildTable(data, header)
@@ -127,52 +133,81 @@ func PrintTable(result map[string]InstanceInfo) {
 	}
 }
 
-func getCostEffectivenessFactor(info InstanceInfo) int {
+func getCostEffectivenessFactor(info InstanceInfo) float64 {
 	// todo: impl, use recommendation util metrics? learn more.
-	return 0
+
+	// 80% cpu = avg cost
+	// max cpu util = ?
+
+	cost, _ := strconv.ParseFloat(info.AvgCostPerPeriod.Blended, 64)
+	cpuUtil, _ := strconv.ParseFloat(info.UsageInfo.CpuUtilPercentage.Max, 64)
+
+	a := cost / 80
+	res :=  a * cpuUtil * 100
+
+	return res
 }
 
 func Merge(src map[string]InstanceInfo, dest map[string]InstanceInfo) map[string]InstanceInfo{
-	for k, v := range src {
-		fmt.Println(k)
-		fmt.Printf("%+v", v)
-		v.merge(dest[k])
+	//fmt.Printf("Merging %d records to result\n\n", len(src))
+	for id, srcInfo := range src {
+		destInfo, found := dest[id]
+		if !found {
+			dest[id] = srcInfo
+		} else {
+			info := destInfo.merge(srcInfo)
+			dest[id] = info
+		}
 	}
 
-	return src
+	return dest
 }
 
-func (insInf InstanceInfo) merge(insInfoToMerge InstanceInfo) {
-	if insInf.InstanceId == "" {
-		insInf.InstanceId = insInfoToMerge.InstanceId
+func (insInf InstanceInfo) merge(sourceInsInfo InstanceInfo) InstanceInfo {
+	//fmt.Println("SRC: %+v", sourceInsInfo)
+	//fmt.Println("before merge: %+v", insInf)
+	result := insInf
+	if result.InstanceId == "" {
+		//fmt.Println("merging id")
+		result.InstanceId = sourceInsInfo.InstanceId
 	}
 
-	if insInf.InstanceType == "" {
-		insInf.InstanceType = insInfoToMerge.InstanceType
+	if result.InstanceType == "" {
+		//fmt.Println("merging type")
+		result.InstanceType = sourceInsInfo.InstanceType
 	}
 
-	if insInf.CapacityType == "" {
-		insInf.CapacityType = insInfoToMerge.CapacityType
+	if result.CapacityType == "" {
+		//fmt.Println("merging CapacityType")
+		result.CapacityType = sourceInsInfo.CapacityType
 	}
 
-	if insInf.Region == "" {
-		insInf.Region = insInfoToMerge.Region
+	if result.Region == "" {
+		//fmt.Println("merging region")
+		result.Region = sourceInsInfo.Region
 	}
 
-	if insInf.AvgCostPerPeriod == (CostPerPeriod{}) {
-		insInf.AvgCostPerPeriod = insInfoToMerge.AvgCostPerPeriod
+	if result.AvgCostPerPeriod == (CostPerPeriod{}) {
+		//fmt.Println("merging AvgCostPerPeriod")
+		result.AvgCostPerPeriod = sourceInsInfo.AvgCostPerPeriod
 	}
 
-	if insInf.UsageInfo == (InstanceUsageInfo{}) {
-		insInf.UsageInfo = insInfoToMerge.UsageInfo
+	if result.UsageInfo == (InstanceUsageInfo{}) {
+		//fmt.Println("merging UsageInfo")
+		result.UsageInfo = sourceInsInfo.UsageInfo
 	}
 
-	if insInf.Recommendations.InstanceId == "" {
-		insInf.Recommendations = insInfoToMerge.Recommendations
+	if result.Recommendations.InstanceId == "" {
+		//fmt.Println("merging Recommendations")
+		result.Recommendations = sourceInsInfo.Recommendations
 	}
 
-	if insInf.CostEffectivenessFactor == 0 {
-		insInf.CostEffectivenessFactor = insInfoToMerge.CostEffectivenessFactor
+	if result.CostEffectivenessFactor == 0 {
+		//fmt.Println("merging CostEffectivenessFactor")
+		result.CostEffectivenessFactor = sourceInsInfo.CostEffectivenessFactor
 	}
+
+	//fmt.Println("after merge: %+v", result)
+	return result
 }
 
